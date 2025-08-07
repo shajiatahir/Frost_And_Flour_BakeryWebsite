@@ -4,15 +4,9 @@
     <div class="customer-orders-page">
       <h1>Track Your Orders</h1>
       <div class="track-order-section">
-        <h2>Enter your email to view your orders</h2>
-        <div class="email-input-section">
-          <input 
-            v-model="customerEmail" 
-            type="email" 
-            placeholder="Enter your email address" 
-            class="email-input"
-            @keyup.enter="trackOrders"
-          />
+        <h2>View your order history</h2>
+        <div class="email-display-section">
+          <p class="email-display">Logged in as: <strong>{{ loggedInEmail }}</strong></p>
           <button @click="trackOrders" class="track-btn">Track Orders</button>
         </div>
       </div>
@@ -46,7 +40,7 @@
       </div>
       
       <div v-else-if="searched" class="no-orders">
-        <p>No orders found for this email address.</p>
+        <p>No orders found for your email address.</p>
       </div>
     </div>
     <Footer />
@@ -56,26 +50,61 @@
 <script setup>
 import Navbar from './Navbar.vue'
 import Footer from './Footer.vue'
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-const customerEmail = ref('')
+const router = useRouter()
 const orders = ref([])
 const searched = ref(false)
 
+// Get logged-in user's email from localStorage
+const loggedInEmail = computed(() => {
+  const authUser = localStorage.getItem('authUser')
+  if (authUser) {
+    try {
+      const userData = JSON.parse(authUser)
+      return userData.email || ''
+    } catch (e) {
+      return ''
+    }
+  }
+  return ''
+})
+
+// Check if user is authenticated
+const isAuthenticated = computed(() => {
+  const authUser = localStorage.getItem('authUser')
+  return authUser && authUser !== 'null' && authUser !== 'undefined'
+})
+
+onMounted(() => {
+  // Redirect to login if not authenticated
+  if (!isAuthenticated.value) {
+    router.push('/login')
+    return
+  }
+  
+  // Auto-track orders when component mounts
+  if (loggedInEmail.value) {
+    trackOrders()
+  }
+})
+
 async function trackOrders() {
-  if (!customerEmail.value) {
-    alert('Please enter your email address')
+  if (!loggedInEmail.value) {
+    alert('Please log in to view your orders')
+    router.push('/login')
     return
   }
   
   try {
-    console.log('Fetching orders for email:', customerEmail.value)
-    const response = await fetch(`http://localhost:3001/api/orders/customer/${encodeURIComponent(customerEmail.value)}`)
+    console.log('Fetching orders for email:', loggedInEmail.value)
+    const response = await fetch(`http://localhost:3001/api/orders/customer/${encodeURIComponent(loggedInEmail.value)}`)
     
     if (!response.ok) {
       console.error('Response not ok:', response.status, response.statusText)
       if (response.status === 404) {
-        alert('No orders found for this email address.')
+        alert('No orders found for your email address.')
       } else {
         alert(`Error: ${response.status} ${response.statusText}`)
       }
@@ -195,20 +224,27 @@ function formatDate(dateString) {
   margin-bottom: 1.5rem;
 }
 
-.email-input-section {
+.email-display-section {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 1rem;
   max-width: 500px;
   margin: 0 auto;
 }
 
-.email-input {
-  flex: 1;
-  padding: 0.8rem 1rem;
-  border-radius: 8px;
-  border: 1.5px solid #ffd6e6;
+.email-display {
+  color: #7a263a;
   font-size: 1rem;
-  outline: none;
+  margin: 0;
+  padding: 0.8rem 1rem;
+  background: #fff0f6;
+  border-radius: 8px;
+  border: 1px solid #ffd6e6;
+}
+
+.email-display strong {
+  color: #d72660;
 }
 
 .track-btn {
@@ -330,10 +366,6 @@ function formatDate(dateString) {
 }
 
 @media (max-width: 768px) {
-  .email-input-section {
-    flex-direction: column;
-  }
-  
   .order-details {
     grid-template-columns: 1fr;
   }

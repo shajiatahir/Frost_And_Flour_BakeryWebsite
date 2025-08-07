@@ -12,7 +12,6 @@ const toggleMachine = createMachine(
           LOGIN: {
             target: "LoginRequest",
             actions: assign((context, event) => {
-              console.log("[FSM] LOGIN transition triggered");
               return {
                 email: event.value.email,
                 password: event.value.password,
@@ -22,22 +21,17 @@ const toggleMachine = createMachine(
           SIGNUP: {
             target: "SignupRequest",
             actions: assign((context, event) => {
-              console.log("[FSM] SIGNUP transition triggered with event:", event);
-              console.log("[FSM] Event value:", event.value);
-              const newContext = {
+              return {
                 name: event.value.name,
                 email: event.value.email,
                 password: event.value.password,
                 role: event.value.role,
               };
-              console.log("[FSM] New context after SIGNUP:", newContext);
-              return newContext;
             }),
           },
           MENU_FETCH: {
             target: "MenuFetchRequest",
             actions: assign((context, event) => {
-              console.log("[FSM] MENU_FETCH transition triggered");
               return {
                 menuRequest: true,
               };
@@ -46,7 +40,6 @@ const toggleMachine = createMachine(
           ORDERS_FETCH: {
             target: "OrdersFetchRequest",
             actions: assign((context, event) => {
-              console.log("[FSM] ORDERS_FETCH transition triggered");
               return {
                 ordersRequest: true,
                 userEmail: event.value.userEmail,
@@ -61,8 +54,7 @@ const toggleMachine = createMachine(
         entry: [
           "spawnFetch",
           (context, event) => {
-            console.log("[FSM] Entering LoginRequest state");
-            console.log("[FSM] Context in LoginRequest:", context);
+            console.log("[FSM] Login request initiated");
             trigger(
               context,
               "http://localhost:3001/api/login",
@@ -83,7 +75,33 @@ const toggleMachine = createMachine(
           },
           LOGIN_FAILURE: {
             actions: ["receiveError", "sendCtx"],
+            target: "LoginError",
+          },
+        },
+      },
+
+      LoginError: {
+        on: {
+          LOGIN: {
+            target: "LoginRequest",
+            actions: assign((context, event) => {
+              return {
+                email: event.value.email,
+                password: event.value.password,
+                errorMessage: null,
+              };
+            }),
+          },
+          LOGOUT: {
             target: "Idle",
+            actions: assign((context) => {
+              return {
+                email: null,
+                password: null,
+                errorMessage: null,
+                user: null,
+              };
+            }),
           },
         },
       },
@@ -92,17 +110,10 @@ const toggleMachine = createMachine(
         entry: [
           "spawnFetch",
           (context, event) => {
-            console.log("[FSM] Entering SignupRequest state");
-            console.log("[FSM] Context in SignupRequest:", context);
+            console.log("[FSM] Signup request initiated");
             
-            // Ensure all required fields are present
             if (!context.name || !context.email || !context.password) {
-              console.log("[FSM] Missing required fields in context:", {
-                name: !!context.name,
-                email: !!context.email,
-                password: !!context.password
-              });
-              // Send error directly
+              console.log("[FSM] Missing required fields for signup");
               context.fetchRef.send({
                 type: "SIGNUP_FAILURE",
                 errorMessage: "Missing required fields in FSM context"
@@ -110,12 +121,6 @@ const toggleMachine = createMachine(
               return;
             }
             
-            console.log("[FSM] Triggering signup with data:", {
-              name: context.name,
-              email: context.email,
-              password: context.password,
-              role: context.role,
-            });
             trigger(
               context,
               "http://localhost:3001/api/signup",
@@ -144,7 +149,36 @@ const toggleMachine = createMachine(
           },
           SIGNUP_FAILURE: {
             actions: ["receiveError", "sendCtx"],
+            target: "SignupError",
+          },
+        },
+      },
+
+      SignupError: {
+        on: {
+          SIGNUP: {
+            target: "SignupRequest",
+            actions: assign((context, event) => {
+              return {
+                name: event.value.name,
+                email: event.value.email,
+                password: event.value.password,
+                role: event.value.role,
+                errorMessage: null,
+              };
+            }),
+          },
+          LOGOUT: {
             target: "Idle",
+            actions: assign((context) => {
+              return {
+                name: null,
+                email: null,
+                password: null,
+                role: null,
+                errorMessage: null,
+              };
+            }),
           },
         },
       },
@@ -153,9 +187,7 @@ const toggleMachine = createMachine(
         entry: [
           "spawnFetch",
           (context, event) => {
-            console.log("[FSM] Entering MenuFetchRequest state");
-            console.log("[FSM] Context in MenuFetchRequest:", context);
-            
+            console.log("[FSM] Menu fetch initiated");
             trigger(
               context,
               "http://localhost:3001/api/menu",
@@ -173,7 +205,31 @@ const toggleMachine = createMachine(
           },
           MENU_FETCH_FAILURE: {
             actions: ["receiveError", "sendCtx"],
+            target: "MenuError",
+          },
+        },
+      },
+
+      MenuError: {
+        on: {
+          MENU_FETCH: {
+            target: "MenuFetchRequest",
+            actions: assign((context, event) => {
+              return {
+                menuRequest: true,
+                errorMessage: null,
+              };
+            }),
+          },
+          LOGOUT: {
             target: "Idle",
+            actions: assign((context) => {
+              return {
+                menuRequest: null,
+                menuItems: null,
+                errorMessage: null,
+              };
+            }),
           },
         },
       },
@@ -182,10 +238,8 @@ const toggleMachine = createMachine(
         entry: [
           "spawnFetch",
           (context, event) => {
-            console.log("[FSM] Entering OrdersFetchRequest state");
-            console.log("[FSM] Context in OrdersFetchRequest:", context);
+            console.log("[FSM] Orders fetch initiated");
             
-            // Prepare headers for admin authentication
             const headers = {
               "Content-Type": "application/json",
               "x-user-email": context.userEmail,
@@ -210,25 +264,150 @@ const toggleMachine = createMachine(
           },
           ORDERS_FETCH_FAILURE: {
             actions: ["receiveError", "sendCtx"],
+            target: "OrdersError",
+          },
+        },
+      },
+
+      OrdersError: {
+        on: {
+          ORDERS_FETCH: {
+            target: "OrdersFetchRequest",
+            actions: assign((context, event) => {
+              return {
+                ordersRequest: true,
+                userEmail: event.value.userEmail,
+                userRole: event.value.userRole,
+                errorMessage: null,
+              };
+            }),
+          },
+          LOGOUT: {
             target: "Idle",
+            actions: assign((context) => {
+              return {
+                ordersRequest: null,
+                orders: null,
+                userEmail: null,
+                userRole: null,
+                errorMessage: null,
+              };
+            }),
           },
         },
       },
 
       LoggedIn: {
-        type: "final",
+        on: {
+          LOGOUT: {
+            target: "Idle",
+            actions: assign((context) => {
+              console.log("[FSM] User logged out");
+              return {
+                user: null,
+                email: null,
+                password: null,
+                errorMessage: null,
+              };
+            }),
+          },
+          MENU_FETCH: {
+            target: "MenuFetchRequest",
+            actions: assign((context, event) => {
+              return {
+                menuRequest: true,
+              };
+            }),
+          },
+          ORDERS_FETCH: {
+            target: "OrdersFetchRequest",
+            actions: assign((context, event) => {
+              return {
+                ordersRequest: true,
+                userEmail: event.value.userEmail,
+                userRole: event.value.userRole,
+              };
+            }),
+          },
+        },
       },
 
       SignedUp: {
-        type: "final",
+        on: {
+          LOGOUT: {
+            target: "Idle",
+            actions: assign((context) => {
+              return {
+                name: null,
+                email: null,
+                password: null,
+                role: null,
+                success: null,
+                message: null,
+                errorMessage: null,
+              };
+            }),
+          },
+          LOGIN: {
+            target: "LoginRequest",
+            actions: assign((context, event) => {
+              return {
+                email: event.value.email,
+                password: event.value.password,
+              };
+            }),
+          },
+        },
       },
 
       MenuFetched: {
-        type: "final",
+        on: {
+          LOGOUT: {
+            target: "Idle",
+            actions: assign((context) => {
+              return {
+                menuItems: null,
+                menuRequest: null,
+                errorMessage: null,
+              };
+            }),
+          },
+          MENU_FETCH: {
+            target: "MenuFetchRequest",
+            actions: assign((context, event) => {
+              return {
+                menuRequest: true,
+              };
+            }),
+          },
+        },
       },
 
       OrdersFetched: {
-        type: "final",
+        on: {
+          LOGOUT: {
+            target: "Idle",
+            actions: assign((context) => {
+              return {
+                orders: null,
+                ordersRequest: null,
+                userEmail: null,
+                userRole: null,
+                errorMessage: null,
+              };
+            }),
+          },
+          ORDERS_FETCH: {
+            target: "OrdersFetchRequest",
+            actions: assign((context, event) => {
+              return {
+                ordersRequest: true,
+                userEmail: event.value.userEmail,
+                userRole: event.value.userRole,
+              };
+            }),
+          },
+        },
       },
     },
   },
@@ -236,12 +415,10 @@ const toggleMachine = createMachine(
     actions: {
       spawnFetch: assign({
         fetchRef: () => {
-          console.log("[FSM] Spawning fetch machine");
           return spawn(fetchMachine);
         },
       }),
       sendCtx: sendParent((context) => {
-        console.log("[FSM] Sending context to parent:", context);
         return { ...context };
       }),
       setUser: assign({
@@ -255,7 +432,7 @@ const toggleMachine = createMachine(
       }),
       receiveError: assign({
         errorMessage: (_, event) => {
-          console.log("[FSM] Error received:", event.errorMessage);
+          console.log("[FSM] Error:", event.errorMessage);
           return event.errorMessage;
         },
       }),
@@ -272,15 +449,6 @@ function trigger(
   failureEvent,
   headers = { "Content-Type": "application/json" }
 ) {
-  console.log("[FSM] Trigger function called with:", {
-    url,
-    method,
-    payload,
-    successEvent,
-    failureEvent,
-    headers
-  });
-  
   if (!context.fetchRef) {
     console.log("[FSM] Error: fetchRef is not available");
     return;
