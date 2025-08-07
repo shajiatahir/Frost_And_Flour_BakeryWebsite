@@ -40,7 +40,7 @@ app.post("/", (req, res) => {
   console.log("[FSM] Sending event:", { type: httpReq.transition, value: httpReq.data });
   
   // Check if the transition type is valid
-  if (httpReq.transition !== 'LOGIN' && httpReq.transition !== 'SIGNUP') {
+  if (httpReq.transition !== 'LOGIN' && httpReq.transition !== 'SIGNUP' && httpReq.transition !== 'MENU_FETCH' && httpReq.transition !== 'ORDERS_FETCH') {
     console.log("[FSM] Invalid transition type:", httpReq.transition);
     res.status(400).json({ error: 'Invalid transition type' });
     return;

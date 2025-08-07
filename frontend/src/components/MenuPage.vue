@@ -16,7 +16,13 @@
           {{ cat.label }}
         </button>
       </div>
-      <div class="menu-items-grid">
+      <div v-if="loading" class="loading-message">
+        Loading menu items...
+      </div>
+      <div v-else-if="error" class="error-message">
+        {{ error }}
+      </div>
+      <div v-else class="menu-items-grid">
         <div v-if="filteredMenuItems.length === 0" class="no-items-message">
           No items found for this category.
         </div>
@@ -48,6 +54,7 @@ import Footer from './Footer.vue'
 import CartDrawer from './CartDrawer.vue'
 import { useCartStore } from '../composables/cartStore'
 import { createMachine } from 'xstate'
+import axios from 'axios'
 
 const cart = useCartStore()
 const addToCart = cart.addToCart
@@ -62,17 +69,8 @@ const categories = [
 ]
 
 const menuItems = ref([])
-
-onMounted(async () => {
-  const res = await fetch('http://localhost:3001/api/menu')
-  const data = await res.json()
-  menuItems.value = data.map(item => ({
-    ...item,
-    price: Number(item.price),
-    rating: Number(item.rating)
-  }))
-  console.log('Loaded menu items:', menuItems.value)
-})
+const loading = ref(false)
+const error = ref('')
 
 // Build states object for each category
 const states = {}
@@ -103,6 +101,45 @@ const filteredMenuItems = computed(() => {
   const filtered = menuItems.value.filter(item => item.category === state.value.value)
   console.log('Filtered items for', state.value.value, filtered)
   return filtered
+})
+
+async function fetchMenuItems() {
+  loading.value = true
+  error.value = ''
+  
+  try {
+    console.log('Fetching menu items through FSM...')
+    const response = await axios.post('http://localhost:3000/', {
+      transition: 'MENU_FETCH',
+      data: {}
+    })
+    
+    console.log('FSM response:', response.data)
+    
+    if (response.data.menuItems) {
+      menuItems.value = response.data.menuItems.map(item => ({
+        ...item,
+        price: Number(item.price),
+        rating: Number(item.rating)
+      }))
+      console.log('Menu items loaded successfully:', menuItems.value)
+    } else if (response.data.errorMessage) {
+      error.value = response.data.errorMessage
+      console.error('FSM error:', response.data.errorMessage)
+    } else {
+      error.value = 'Failed to load menu items'
+      console.error('Unexpected FSM response:', response.data)
+    }
+  } catch (err) {
+    console.error('Error fetching menu items:', err)
+    error.value = 'Failed to load menu items. Please try again.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchMenuItems()
 })
 </script>
 
@@ -159,6 +196,21 @@ const filteredMenuItems = computed(() => {
   background: #d72660;
   color: #fff;
   border: 2px solid #d72660;
+}
+.loading-message, .error-message {
+  text-align: center;
+  color: #b48a78;
+  font-size: 1.1rem;
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #fff0f6;
+  border-radius: 15px;
+  border: 2px solid #ffd6e6;
+}
+.error-message {
+  color: #d72660;
+  border-color: #d72660;
+  background: #ffe6f0;
 }
 .menu-items-grid {
   display: flex;

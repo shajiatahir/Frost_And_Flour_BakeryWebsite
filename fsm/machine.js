@@ -34,6 +34,26 @@ const toggleMachine = createMachine(
               return newContext;
             }),
           },
+          MENU_FETCH: {
+            target: "MenuFetchRequest",
+            actions: assign((context, event) => {
+              console.log("[FSM] MENU_FETCH transition triggered");
+              return {
+                menuRequest: true,
+              };
+            }),
+          },
+          ORDERS_FETCH: {
+            target: "OrdersFetchRequest",
+            actions: assign((context, event) => {
+              console.log("[FSM] ORDERS_FETCH transition triggered");
+              return {
+                ordersRequest: true,
+                userEmail: event.value.userEmail,
+                userRole: event.value.userRole,
+              };
+            }),
+          },
         },
       },
 
@@ -129,11 +149,85 @@ const toggleMachine = createMachine(
         },
       },
 
+      MenuFetchRequest: {
+        entry: [
+          "spawnFetch",
+          (context, event) => {
+            console.log("[FSM] Entering MenuFetchRequest state");
+            console.log("[FSM] Context in MenuFetchRequest:", context);
+            
+            trigger(
+              context,
+              "http://localhost:3001/api/menu",
+              "GET",
+              {},
+              "MENU_FETCH_SUCCESS",
+              "MENU_FETCH_FAILURE"
+            );
+          },
+        ],
+        on: {
+          MENU_FETCH_SUCCESS: {
+            actions: ["setMenuItems", "sendCtx"],
+            target: "MenuFetched",
+          },
+          MENU_FETCH_FAILURE: {
+            actions: ["receiveError", "sendCtx"],
+            target: "Idle",
+          },
+        },
+      },
+
+      OrdersFetchRequest: {
+        entry: [
+          "spawnFetch",
+          (context, event) => {
+            console.log("[FSM] Entering OrdersFetchRequest state");
+            console.log("[FSM] Context in OrdersFetchRequest:", context);
+            
+            // Prepare headers for admin authentication
+            const headers = {
+              "Content-Type": "application/json",
+              "x-user-email": context.userEmail,
+              "x-user-role": context.userRole
+            };
+            
+            trigger(
+              context,
+              "http://localhost:3001/api/orders",
+              "GET",
+              {},
+              "ORDERS_FETCH_SUCCESS",
+              "ORDERS_FETCH_FAILURE",
+              headers
+            );
+          },
+        ],
+        on: {
+          ORDERS_FETCH_SUCCESS: {
+            actions: ["setOrders", "sendCtx"],
+            target: "OrdersFetched",
+          },
+          ORDERS_FETCH_FAILURE: {
+            actions: ["receiveError", "sendCtx"],
+            target: "Idle",
+          },
+        },
+      },
+
       LoggedIn: {
         type: "final",
       },
 
       SignedUp: {
+        type: "final",
+      },
+
+      MenuFetched: {
+        type: "final",
+      },
+
+      OrdersFetched: {
         type: "final",
       },
     },
@@ -153,6 +247,12 @@ const toggleMachine = createMachine(
       setUser: assign({
         user: (_, event) => event.result.user,
       }),
+      setMenuItems: assign({
+        menuItems: (_, event) => event.result,
+      }),
+      setOrders: assign({
+        orders: (_, event) => event.result,
+      }),
       receiveError: assign({
         errorMessage: (_, event) => {
           console.log("[FSM] Error received:", event.errorMessage);
@@ -169,14 +269,16 @@ function trigger(
   method,
   payload,
   successEvent,
-  failureEvent
+  failureEvent,
+  headers = { "Content-Type": "application/json" }
 ) {
   console.log("[FSM] Trigger function called with:", {
     url,
     method,
     payload,
     successEvent,
-    failureEvent
+    failureEvent,
+    headers
   });
   
   if (!context.fetchRef) {
@@ -186,7 +288,7 @@ function trigger(
   
   context.fetchRef.send({
     type: "FETCH",
-    value: { url, method, payload, successEvent, failureEvent },
+    value: { url, method, payload, successEvent, failureEvent, headers },
   });
 }
 

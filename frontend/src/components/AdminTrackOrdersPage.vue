@@ -28,8 +28,17 @@
         </div>
       </div>
 
+      <!-- Loading and Error States -->
+      <div v-if="loading" class="loading-state">
+        <p>Loading orders...</p>
+      </div>
+      <div v-else-if="error" class="error-state">
+        <p>{{ error }}</p>
+        <button @click="loadOrders" class="retry-btn">Retry</button>
+      </div>
+      
       <!-- Orders Table -->
-      <div v-if="filteredOrders.length === 0" class="empty-state">
+      <div v-else-if="filteredOrders.length === 0" class="empty-state">
         <p v-if="searchEmail">No orders found for "{{ searchEmail }}"</p>
         <p v-else>No orders found.</p>
       </div>
@@ -150,6 +159,7 @@
 import Navbar from './Navbar.vue'
 import Footer from './Footer.vue'
 import { ref, onMounted, computed } from 'vue'
+import axios from 'axios'
 
 const orders = ref([])
 const searchEmail = ref('')
@@ -158,6 +168,8 @@ const showEditModal = ref(false)
 const selectedOrder = ref(null)
 const editOrderData = ref({})
 const editingOrderId = ref(null)
+const loading = ref(false)
+const error = ref('')
 
 const filteredOrders = computed(() => {
   if (!searchEmail.value) return orders.value
@@ -175,35 +187,54 @@ onMounted(() => {
 })
 
 async function loadOrders() {
+  loading.value = true
+  error.value = ''
+  
   try {
+    console.log('Fetching orders through FSM...')
     const authUser = JSON.parse(localStorage.getItem('authUser') || '{}')
-    const response = await fetch('http://localhost:3001/api/orders', {
-      headers: {
-        'x-user-email': authUser.email,
-        'x-user-role': authUser.role
-      }
-    })
-    const data = await response.json()
     
-    // Process orders to ensure items are properly parsed
-    orders.value = data.map(order => {
-      let items = []
-      if (order.items) {
-        try {
-          if (typeof order.items === 'string') {
-            items = JSON.parse(order.items)
-          } else if (Array.isArray(order.items)) {
-            items = order.items
-          }
-        } catch (e) {
-          console.error('Error parsing items for order:', order.id, e)
-          items = []
-        }
+    const response = await axios.post('http://localhost:3000/', {
+      transition: 'ORDERS_FETCH',
+      data: {
+        userEmail: authUser.email,
+        userRole: authUser.role
       }
-      return { ...order, items: Array.isArray(items) ? items : [] }
     })
-  } catch (error) {
-    console.error('Error loading orders:', error)
+    
+    console.log('FSM response:', response.data)
+    
+    if (response.data.orders) {
+      // Process orders to ensure items are properly parsed
+      orders.value = response.data.orders.map(order => {
+        let items = []
+        if (order.items) {
+          try {
+            if (typeof order.items === 'string') {
+              items = JSON.parse(order.items)
+            } else if (Array.isArray(order.items)) {
+              items = order.items
+            }
+          } catch (e) {
+            console.error('Error parsing items for order:', order.id, e)
+            items = []
+          }
+        }
+        return { ...order, items: Array.isArray(items) ? items : [] }
+      })
+      console.log('Orders loaded successfully:', orders.value)
+    } else if (response.data.errorMessage) {
+      error.value = response.data.errorMessage
+      console.error('FSM error:', response.data.errorMessage)
+    } else {
+      error.value = 'Failed to load orders'
+      console.error('Unexpected FSM response:', response.data)
+    }
+  } catch (err) {
+    console.error('Error fetching orders:', err)
+    error.value = 'Failed to load orders. Please try again.'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -403,6 +434,33 @@ function formatDate(dateString) {
   font-size: 1.5rem;
   font-weight: 700;
   color: #d72660;
+}
+
+.loading-state, .error-state {
+  text-align: center;
+  color: #b48a78;
+  font-size: 1.1rem;
+  padding: 3rem;
+}
+
+.error-state {
+  color: #d72660;
+}
+
+.retry-btn {
+  background: #d72660;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.8rem 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: #b71c4a;
 }
 
 .empty-state {

@@ -17,6 +17,7 @@ const fetchMachine = createMachine(
               payload: event.value.payload,
               successEvent: event.value.successEvent,
               failureEvent: event.value.failureEvent,
+              headers: event.value.headers || { "Content-Type": "application/json" },
             })),
           },
         },
@@ -25,13 +26,21 @@ const fetchMachine = createMachine(
         invoke: {
           src: (context, event) => async () => {
             console.log("[FSM] Making fetch request to:", context.url);
+            console.log("[FSM] Method:", context.method);
             console.log("[FSM] Payload:", context.payload);
+            console.log("[FSM] Headers:", context.headers);
             
-            const res = await fetch(context.url, {
+            const fetchOptions = {
               method: context.method,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(context.payload),
-            });
+              headers: context.headers,
+            };
+            
+            // Only add body for non-GET requests
+            if (context.method !== 'GET' && context.payload) {
+              fetchOptions.body = JSON.stringify(context.payload);
+            }
+            
+            const res = await fetch(context.url, fetchOptions);
             
             console.log("[FSM] Response status:", res.status);
             
